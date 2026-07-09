@@ -42,3 +42,7 @@ __*
 AzuriteConfig
 # Claude/Cursor worktrees and local AI tooling
 .claude/
+
+# CIPP Bastion partner access codes (secret distribution lists)
+tools/pages-gate/codes.local.json
+tools/pages-gate/*.local.*

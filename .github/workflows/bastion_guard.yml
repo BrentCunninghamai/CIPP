@@ -1,0 +1,83 @@
+name: Bastion Secrets Guard
+
+# Runs the CIPP Bastion leak checks on EVERY push and pull request — not just
+# deploys — so a committed partner codes file or plaintext partner content is
+# caught immediately, on any branch, before it can ever reach main. The deploy
+# workflow repeats these checks right before publishing as a second layer.
+#
+# NOTE: this checks the commit's tree, not git history. If a real code was
+# ever committed — even briefly — treat it as burned and rotate it.
+
+on:
+  push:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  guard:
+    name: Scan for leaked partner secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Scan tracked files
+        run: |
+          set -euo pipefail
+
+          # 1) No codes files anywhere (any directory), except the example.
+          if git ls-files | grep -E '(^|/)codes[^/]*\.json$' | grep -v '^tools/pages-gate/codes\.example\.json$' | grep -q .; then
+            echo "::error::A partner codes file is committed — remove it and rotate ALL access codes (they are burned)."
+            exit 1
+          fi
+
+          # 2) No .local. files anywhere (the gitignored secrets convention).
+          if git ls-files | grep -E '\.local\.' | grep -q .; then
+            echo "::error::A *.local.* file is committed — these are secret by convention. Remove it and rotate."
+            exit 1
+          fi
+
+          # 3) Nothing partner-content-like under docs/ except the sealed bundle.
+          if git ls-files docs | grep -i 'partner-content' | grep -v '^docs/partner-content\.json$' | grep -q .; then
+            echo "::error::Unencrypted partner content found under docs/ — only the sealed bundle may be published."
+            exit 1
+          fi
+
+          # 4) Sealed-bundle policy: KDF strength + the PUBLIC demo code must
+          #    not open a bundle with real partner slots.
+          if [ -f docs/partner-content.json ]; then
+            node -e "
+              const path = require('path');
+              const gate = require(path.resolve('docs/assets/gate.js'));
+              const b = require(path.resolve('docs/partner-content.json'));
+              if (b.version !== 1 || !b.payload?.ciphertext || !Array.isArray(b.slots) || b.slots.length === 0) {
+                console.error('::error::docs/partner-content.json is not a valid sealed bundle.');
+                process.exit(1);
+              }
+              if (b.kdf?.name !== 'PBKDF2' || (b.kdf?.iterations ?? 0) < 600000) {
+                console.error('::error::Sealed bundle KDF is weaker than the documented policy (PBKDF2-SHA256 >= 600k iterations).');
+                process.exit(1);
+              }
+              (async () => {
+                const DEMO = 'T1CSP-DEMO2-ACCES-SCODE-ROTAT-EMENOW'; // public, in codes.example.json
+                const res = await gate.unlock(b, DEMO);
+                if (res && !(b.slots.length === 1 && res.slotId === 'demo')) {
+                  console.error('::error::The PUBLIC demo code unlocks a production slot — reseal with real codes.');
+                  process.exit(1);
+                }
+                console.log('Sealed bundle OK:', b.slots.length, 'slot(s),', b.kdf.iterations, 'KDF iterations');
+              })().catch((e) => { console.error('::error::' + e.message); process.exit(1); });
+            "
+          fi
+
+          echo "No partner secrets found in the tracked tree."

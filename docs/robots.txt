@@ -1,5 +1,3 @@
-# Landing page for the CIPP project — https://www.robotstxt.org/robotstxt.html
+# CIPP Bastion — restricted partner gateway. Keep out of search indexes.
 User-agent: *
-Allow: /
-
-Sitemap: /sitemap.xml
+Disallow: /

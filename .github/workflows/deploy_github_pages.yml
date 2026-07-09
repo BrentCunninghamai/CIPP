@@ -1,19 +1,35 @@
-name: Deploy GitHub Pages
+name: Deploy CIPP Bastion (GitHub Pages)
 
-# Publishes the static project landing site in ./docs to GitHub Pages.
+# Publishes the CIPP Bastion partner gateway in ./docs to GitHub Pages.
 #
 # Security posture:
 #   * Least-privilege GITHUB_TOKEN — no permissions by default, only the exact
 #     scopes each job needs are granted below.
-#   * step-security/harden-runner audits egress so any unexpected network call
-#     from a compromised dependency is surfaced.
+#   * Every action is pinned to an immutable commit SHA (Dependabot still
+#     tracks the version comments and PRs updates).
+#   * step-security/harden-runner audits egress in BOTH jobs — including the
+#     deploy job, which holds the only sensitive credentials.
+#   * Deploys only ever run for refs/heads/main, including manual dispatch.
 #   * The checkout does not persist credentials into the workspace.
-#   * Only ./docs is uploaded — application source is never bundled into the
-#     published artifact.
+#   * Only ./docs is uploaded — application source, partner access codes, and
+#     unencrypted partner content are never bundled into the artifact. Partner
+#     material ships ONLY as the sealed AES-256-GCM bundle
+#     (docs/partner-content.json) produced by tools/pages-gate/encrypt.mjs.
+#   * A guard step scans the deployed tree (all tracked files, recursively)
+#     for codes files / plaintext partner content, validates the sealed
+#     bundle's KDF policy, and refuses any production bundle that the PUBLIC
+#     demo code can open. NOTE: it checks the tree being deployed, not git
+#     history — a code that was ever committed must be treated as burned and
+#     rotated. (.github/workflows/bastion_guard.yml runs the same scan on
+#     every push and PR, so leaks are caught before they reach main.)
 #   * A single-flight concurrency group prevents overlapping deploys.
 #
-# One-time setup: in repo Settings → Pages, set "Build and deployment" →
-# "Source" to "GitHub Actions".
+# One-time setup:
+#   1. Settings → Pages → "Build and deployment" → "Source" = "GitHub Actions".
+#   2. Settings → Environments → github-pages → add "Required reviewers"
+#      (yourself / release owners) and restrict the environment to the main
+#      branch. Every deploy then needs an explicit human approval before
+#      anything publishes, so only releases you sign off on ever go out.
 
 on:
   push:
@@ -34,31 +50,89 @@ concurrency:
 jobs:
   build:
     name: Build Pages artifact
+    # Never build (or deploy) anything but main — including manual dispatch
+    # from another branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Harden the runner (audit egress)
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
 
+      # Fail closed if partner secrets or plaintext partner content are
+      # anywhere in the deployed tree, or the sealed bundle violates policy.
+      - name: Guard against leaking partner secrets
+        run: |
+          set -euo pipefail
+
+          # 1) No codes files anywhere (any directory), except the example.
+          if git ls-files | grep -E '(^|/)codes[^/]*\.json$' | grep -v '^tools/pages-gate/codes\.example\.json$' | grep -q .; then
+            echo "::error::A partner codes file is committed — remove it and rotate ALL access codes (they are burned)."
+            exit 1
+          fi
+
+          # 2) No .local. files anywhere (the gitignored secrets convention).
+          if git ls-files | grep -E '\.local\.' | grep -q .; then
+            echo "::error::A *.local.* file is committed — these are secret by convention. Remove it and rotate."
+            exit 1
+          fi
+
+          # 3) Nothing partner-content-like under docs/ except the sealed bundle.
+          if git ls-files docs | grep -i 'partner-content' | grep -v '^docs/partner-content\.json$' | grep -q .; then
+            echo "::error::Unencrypted partner content found under docs/ — only the sealed bundle may be published."
+            exit 1
+          fi
+
+          # 4) The sealed bundle must satisfy the KDF policy the docs promise,
+          #    and the PUBLIC demo code must not open a production bundle.
+          if [ -f docs/partner-content.json ]; then
+            node -e "
+              const path = require('path');
+              const gate = require(path.resolve('docs/assets/gate.js'));
+              const b = require(path.resolve('docs/partner-content.json'));
+              if (b.version !== 1 || !b.payload?.ciphertext || !Array.isArray(b.slots) || b.slots.length === 0) {
+                console.error('::error::docs/partner-content.json is not a valid sealed bundle.');
+                process.exit(1);
+              }
+              if (b.kdf?.name !== 'PBKDF2' || (b.kdf?.iterations ?? 0) < 600000) {
+                console.error('::error::Sealed bundle KDF is weaker than the documented policy (PBKDF2-SHA256 >= 600k iterations).');
+                process.exit(1);
+              }
+              (async () => {
+                const DEMO = 'T1CSP-DEMO2-ACCES-SCODE-ROTAT-EMENOW'; // public, in codes.example.json
+                const res = await gate.unlock(b, DEMO);
+                if (res && !(b.slots.length === 1 && res.slotId === 'demo')) {
+                  console.error('::error::The PUBLIC demo code unlocks a production slot — reseal with real codes.');
+                  process.exit(1);
+                }
+                if (res) {
+                  console.log('::warning::Publishing the DEMO bundle (opens with the public demo code). Rotate before real partner use.');
+                }
+                console.log('Sealed bundle OK:', b.slots.length, 'slot(s),', b.kdf.iterations, 'KDF iterations');
+              })().catch((e) => { console.error('::error::' + e.message); process.exit(1); });
+            "
+          fi
+
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: ./docs
 
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write # deploy to Pages
@@ -67,6 +141,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # This job mints the OIDC token — audit its egress too.
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2
+        with:
+          egress-policy: audit
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
