@@ -1,8 +1,8 @@
-import { Layout as DashboardLayout } from "/src/layouts/index.js";
-import { useSettings } from "/src/hooks/use-settings";
+import { Layout as DashboardLayout } from "../../../../../layouts/index.js";
+import { useSettings } from "../../../../../hooks/use-settings";
 import { useRouter } from "next/router";
-import { ApiGetCall } from "/src/api/ApiCall";
-import CippFormSkeleton from "/src/components/CippFormPages/CippFormSkeleton";
+import { ApiGetCall } from "../../../../../api/ApiCall";
+import CippFormSkeleton from "../../../../../components/CippFormPages/CippFormSkeleton";
 import CalendarIcon from "@heroicons/react/24/outline/CalendarIcon";
 import {
   Check,
@@ -107,6 +107,12 @@ const Page = () => {
     waiting: waiting,
   });
 
+  const junkEmailConfigRequest = ApiGetCall({
+    url: `/api/ListUserTrustedBlockedSenders?UserId=${userId}&userPrincipalName=${graphUserRequest.data?.[0]?.userPrincipalName}&tenantFilter=${userSettingsDefaults.currentTenant}`,
+    queryKey: `TrustedBlockedSenders-${userId}`,
+    waiting: waiting && !!graphUserRequest.data?.[0]?.userPrincipalName,
+  });
+
   const groupsList = ApiGetCall({
     url: "/api/ListGraphRequest",
     data: {
@@ -157,7 +163,10 @@ const Page = () => {
         // Exact match on display name
         (group.displayName && group.displayName === userIdentifier) ||
         // Partial match - permission identifier starts with group display name (handles timestamps)
-        (group.displayName && userIdentifier.startsWith(group.displayName))
+        (group.displayName &&
+          typeof group.displayName === "string" &&
+          typeof userIdentifier === "string" &&
+          userIdentifier.startsWith(group.displayName))
       );
     });
 
@@ -307,11 +316,11 @@ const Page = () => {
       });
       formControl.setValue(
         "ooo.StartTime",
-        new Date(oooRequest.data?.StartTime).getTime() / 1000 || null
+        new Date(oooRequest.data?.StartTime).getTime() / 1000 || null,
       );
       formControl.setValue(
         "ooo.EndTime",
-        new Date(oooRequest.data?.EndTime).getTime() / 1000 || null
+        new Date(oooRequest.data?.EndTime).getTime() / 1000 || null,
       );
     }
   }, [oooRequest.isSuccess, oooRequest.data]);
@@ -938,13 +947,15 @@ const Page = () => {
       icon: <PlayArrow />,
       url: "/api/ExecSetMailboxRule",
       customDataformatter: (row, action, formData) => {
-        return {
-          ruleId: row?.Identity,
+        const rows = Array.isArray(row) ? row : [row];
+        const result = rows.map((r) => ({
+          ruleId: r?.Identity,
           userPrincipalName: graphUserRequest.data?.[0]?.userPrincipalName,
-          ruleName: row?.Name,
+          ruleName: r?.Name,
           Enable: true,
           tenantFilter: userSettingsDefaults.currentTenant,
-        };
+        }));
+        return Array.isArray(row) ? result : result[0];
       },
       condition: (row) => row && !row.Enabled,
       confirmText: "Are you sure you want to enable this mailbox rule?",
@@ -956,13 +967,15 @@ const Page = () => {
       icon: <Block />,
       url: "/api/ExecSetMailboxRule",
       customDataformatter: (row, action, formData) => {
-        return {
-          ruleId: row?.Identity,
+        const rows = Array.isArray(row) ? row : [row];
+        const result = rows.map((r) => ({
+          ruleId: r?.Identity,
           userPrincipalName: graphUserRequest.data?.[0]?.userPrincipalName,
-          ruleName: row?.Name,
+          ruleName: r?.Name,
           Disable: true,
           tenantFilter: userSettingsDefaults.currentTenant,
-        };
+        }));
+        return Array.isArray(row) ? result : result[0];
       },
       condition: (row) => row && row.Enabled,
       confirmText: "Are you sure you want to disable this mailbox rule?",
@@ -974,12 +987,14 @@ const Page = () => {
       icon: <Delete />,
       url: "/api/ExecRemoveMailboxRule",
       customDataformatter: (row, action, formData) => {
-        return {
-          ruleId: row?.Identity,
-          ruleName: row?.Name,
+        const rows = Array.isArray(row) ? row : [row];
+        const result = rows.map((r) => ({
+          ruleId: r?.Identity,
+          ruleName: r?.Name,
           userPrincipalName: graphUserRequest.data?.[0]?.userPrincipalName,
           tenantFilter: userSettingsDefaults.currentTenant,
-        };
+        }));
+        return Array.isArray(row) ? result : result[0];
       },
       confirmText: "Are you sure you want to remove this mailbox rule?",
       multiPost: false,
@@ -1015,7 +1030,7 @@ const Page = () => {
         offCanvas: {
           children: (data) => {
             const keys = Object.keys(data).filter(
-              (key) => !key.includes("@odata") && !key.includes("@data")
+              (key) => !key.includes("@odata") && !key.includes("@data"),
             );
             const properties = [];
             keys.forEach((key) => {
@@ -1078,6 +1093,81 @@ const Page = () => {
                     relatedQueryKeys: `MailboxRules-${userId}`,
                   },
                 ]}
+              />
+            );
+          },
+        },
+      },
+    },
+  ];
+
+  const junkEmailConfigActions = [
+    {
+      label: "Remove Entry",
+      type: "POST",
+      icon: <Delete />,
+      url: "/api/RemoveTrustedBlockedSender",
+      customDataformatter: (row, action, formData) => {
+        return {
+          userPrincipalName: row?.UserPrincipalName,
+          typeProperty: row?.TypeProperty,
+          value: row?.Value,
+          tenantFilter: userSettingsDefaults.currentTenant,
+        };
+      },
+      confirmText:
+        "Are you sure you want to remove [Value] from the [Type] list for [UserPrincipalName]?",
+      multiPost: false,
+      relatedQueryKeys: `JunkEmailConfig-${userId}`,
+    },
+  ];
+
+  const junkEmailConfigCard = [
+    {
+      id: 1,
+      cardLabelBox: {
+        cardLabelBoxHeader: junkEmailConfigRequest.isFetching ? (
+          <CircularProgress size="25px" color="inherit" />
+        ) : junkEmailConfigRequest.data?.length !== 0 ? (
+          <Check />
+        ) : (
+          <Error />
+        ),
+      },
+      text: "Trusted and Blocked Senders/Domains",
+      subtext: junkEmailConfigRequest.data?.length
+        ? "Trusted/Blocked senders and domains are configured for this user"
+        : "No trusted or blocked senders/domains entries for this user",
+      statusColor: "green.main",
+      table: {
+        title: "Trusted and Blocked Senders/Domains",
+        hideTitle: true,
+        data: junkEmailConfigRequest.data || [],
+        refreshFunction: () => junkEmailConfigRequest.refetch(),
+        isFetching: junkEmailConfigRequest.isFetching,
+        simpleColumns: ["Type", "Value"],
+        actions: junkEmailConfigActions,
+        offCanvas: {
+          children: (data) => {
+            return (
+              <CippPropertyListCard
+                cardSx={{ p: 0, m: -2 }}
+                title="Entry Details"
+                propertyItems={[
+                  {
+                    label: "Type",
+                    value: data.Type,
+                  },
+                  {
+                    label: "Value",
+                    value: data.Value,
+                  },
+                  {
+                    label: "Property",
+                    value: data.TypeProperty,
+                  },
+                ]}
+                actionItems={junkEmailConfigActions}
               />
             );
           },
@@ -1154,7 +1244,7 @@ const Page = () => {
         data:
           graphUserRequest.data?.[0]?.proxyAddresses?.map((address) => ({
             Address: address,
-            Type: address?.startsWith("SMTP:") ? "Primary" : "Alias",
+            Type: typeof address === "string" && address.startsWith("SMTP:") ? "Primary" : "Alias",
           })) || [],
         refreshFunction: () => graphUserRequest.refetch(),
         isFetching: graphUserRequest.isFetching,
@@ -1210,7 +1300,7 @@ const Page = () => {
                   <Box display="flex" justifyContent="space-between">
                     <Typography variant="body2">
                       {userRequest?.data?.[0]?.Mailbox?.[0]?.error.includes(
-                        "Microsoft.Exchange.Configuration.Tasks.ManagementObjectNotFoundException"
+                        "Microsoft.Exchange.Configuration.Tasks.ManagementObjectNotFoundException",
                       )
                         ? "This user does not have a mailbox, make sure they are licensed for Exchange."
                         : "An error occurred while fetching the mailbox details."}
@@ -1230,7 +1320,7 @@ const Page = () => {
               </Grid>
             )}
             {!userRequest?.data?.[0]?.Mailbox?.[0]?.error?.includes(
-              "Microsoft.Exchange.Configuration.Tasks.ManagementObjectNotFoundException"
+              "Microsoft.Exchange.Configuration.Tasks.ManagementObjectNotFoundException",
             ) && (
               <>
                 <Grid size={4}>
@@ -1266,6 +1356,11 @@ const Page = () => {
                     <CippBannerListCard
                       isFetching={mailboxRulesRequest.isLoading}
                       items={mailboxRulesCard}
+                      isCollapsible={true}
+                    />
+                    <CippBannerListCard
+                      isFetching={junkEmailConfigRequest.isLoading}
+                      items={junkEmailConfigCard}
                       isCollapsible={true}
                     />
                     <CippExchangeSettingsForm
