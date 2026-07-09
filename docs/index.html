@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CIPP — CyberDrain Improved Partner Portal</title>
+    <meta
+      name="description"
+      content="CIPP is an open-source portal that helps Microsoft Partners manage multi-tenant administration. This page is the project landing site — the portal itself is self-hosted and authentication-gated."
+    />
+
+    <!--
+      Security hardening (best effort on GitHub Pages).
+
+      GitHub Pages cannot serve custom HTTP response headers, so defence-in-depth
+      here relies on the mechanisms browsers honour from a <meta> element plus a
+      deliberately minimal, fully self-contained page (no external scripts,
+      styles, fonts, images, or network calls of any kind).
+
+      - Content-Security-Policy: script-src 'none' means NO JavaScript can run on
+        this page at all. Everything else is locked to 'self' / data:. This is the
+        strongest practical mitigation against XSS and content injection.
+      - referrer: no-referrer prevents leaking the URL to any link target.
+      - Note: X-Frame-Options / frame-ancestors and X-Content-Type-Options can
+        only be set as real headers, which Pages does not support. See
+        docs/README.md for the framing note.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; base-uri 'none'; form-action 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; manifest-src 'self'; connect-src 'none'; script-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f77f00" />
+
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="assets/logo-512.png" />
+
+    <style>
+      :root {
+        --brand: #f77f00;
+        --brand-2: #fcbf49;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --ink: #1c2733;
+        --muted: #5b6b7b;
+        --line: #e4e8ee;
+        --ok: #1f9d55;
+        --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 28px rgba(16, 24, 40, 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --panel: #161b22;
+          --ink: #e6edf3;
+          --muted: #9aa7b4;
+          --line: #232b34;
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+          sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--ink);
+        background:
+          radial-gradient(1100px 520px at 82% -8%, rgba(247, 127, 0, 0.14), transparent 60%),
+          radial-gradient(900px 480px at 6% 4%, rgba(252, 191, 73, 0.12), transparent 55%),
+          var(--bg);
+        line-height: 1.6;
+        min-height: 100vh;
+      }
+      a { color: var(--brand); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+      header { padding: 28px 0 8px; }
+      .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .brand img { width: 40px; height: 40px; border-radius: 9px; }
+      .brand strong { font-size: 1.05rem; letter-spacing: 0.2px; }
+      .nav-links { display: flex; gap: 20px; font-size: 0.92rem; }
+      .nav-links a { color: var(--muted); }
+      .nav-links a:hover { color: var(--ink); text-decoration: none; }
+
+      .hero { padding: 56px 0 40px; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+        background: var(--panel); font-size: 0.8rem; color: var(--muted); font-weight: 600;
+      }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+      h1 {
+        font-size: clamp(2rem, 5.5vw, 3.1rem); line-height: 1.1; margin: 20px 0 14px;
+        letter-spacing: -0.02em;
+      }
+      h1 .grad {
+        background: linear-gradient(92deg, var(--brand), var(--brand-2));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .lede { font-size: 1.12rem; color: var(--muted); max-width: 62ch; }
+      .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px;
+        border-radius: 10px; font-weight: 650; font-size: 0.95rem; border: 1px solid transparent;
+      }
+      .btn:hover { text-decoration: none; }
+      .btn-primary { background: var(--brand); color: #1c1200; }
+      .btn-primary:hover { background: var(--brand-2); }
+      .btn-ghost { background: var(--panel); border-color: var(--line); color: var(--ink); }
+      .btn-ghost:hover { border-color: var(--brand); }
+
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+      section { padding: 22px 0; }
+      .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+        padding: 22px; box-shadow: var(--shadow);
+      }
+      .card h3 { margin: 0 0 8px; font-size: 1.02rem; }
+      .card p { margin: 0; color: var(--muted); font-size: 0.94rem; }
+      .kicker {
+        text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.72rem;
+        color: var(--brand); font-weight: 700; margin: 0 0 6px;
+      }
+      h2 { font-size: 1.5rem; margin: 4px 0 18px; letter-spacing: -0.01em; }
+
+      .note {
+        display: flex; gap: 14px; align-items: flex-start;
+        background: var(--panel); border: 1px solid var(--line);
+        border-left: 4px solid var(--brand); border-radius: 12px; padding: 18px 20px;
+      }
+      .note .ico { font-size: 1.3rem; line-height: 1.4; }
+      .note p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+      .note strong { color: var(--ink); }
+
+      .sec-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+      .sec-list li {
+        display: flex; gap: 12px; align-items: flex-start; font-size: 0.95rem; color: var(--muted);
+      }
+      .sec-list .check { color: var(--ok); font-weight: 800; flex: none; }
+      .sec-list b { color: var(--ink); font-weight: 650; }
+
+      footer {
+        border-top: 1px solid var(--line); margin-top: 30px; padding: 26px 0 48px;
+        color: var(--muted); font-size: 0.88rem;
+      }
+      .foot-row { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; justify-content: space-between; }
+      .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
+      .foot-links a { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <nav class="nav" aria-label="Primary">
+          <div class="brand">
+            <img src="assets/logo.png" alt="CIPP logo" />
+            <strong>CIPP</strong>
+          </div>
+          <div class="nav-links">
+            <a href="https://cipp.app">Website</a>
+            <a href="https://docs.cipp.app">Docs</a>
+            <a href="https://github.com/KelvinTegelaar/CIPP">GitHub</a>
+          </div>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <span class="pill"><span class="dot"></span> Open source · AGPL-3.0</span>
+          <h1>The <span class="grad">CyberDrain Improved Partner Portal</span></h1>
+          <p class="lede">
+            CIPP helps Microsoft Partners manage multi-tenant administration — user
+            management, standards deployment, and day-to-day tenant operations — from a
+            single open-source portal. This is the project landing page.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="https://docs.cipp.app/setup/installation/" rel="noopener"
+              >Get started →</a
+            >
+            <a class="btn btn-ghost" href="https://github.com/KelvinTegelaar/CIPP" rel="noopener"
+              >View source</a
+            >
+          </div>
+        </section>
+
+        <section>
+          <div class="note">
+            <span class="ico" aria-hidden="true">🔒</span>
+            <p>
+              <strong>This page is informational only.</strong> The CIPP portal is
+              self-hosted and sits behind Microsoft Entra ID (Azure AD) authentication with
+              its own backend API. No tenant data, credentials, or the authenticated
+              application are served from this static site.
+            </p>
+          </div>
+        </section>
+
+        <section>
+          <p class="kicker">What it does</p>
+          <h2>Built for multi-tenant management</h2>
+          <div class="grid">
+            <div class="card">
+              <h3>👥 User &amp; tenant management</h3>
+              <p>Administer users, groups, and devices across every customer tenant from one place.</p>
+            </div>
+            <div class="card">
+              <h3>📐 Standards &amp; baselines</h3>
+              <p>Define your preferred configuration once and deploy it consistently to all tenants.</p>
+            </div>
+            <div class="card">
+              <h3>📊 Reporting &amp; insight</h3>
+              <p>Surface Secure Score, licensing, and posture data to cut hours of manual work.</p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <p class="kicker">Security</p>
+          <h2>How this page is hardened</h2>
+          <ul class="sec-list">
+            <li>
+              <span class="check">✓</span>
+              <span><b>Strict Content-Security-Policy</b> — <code>script-src 'none'</code>: no
+              JavaScript executes on this page, and all resources are locked to same-origin.</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span><b>Fully self-contained</b> — no external scripts, fonts, trackers, or
+              network calls, so there is no third-party attack surface.</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span><b>No referrer leakage</b> — <code>referrer: no-referrer</code> and
+              <code>rel="noopener"</code> on outbound links.</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span><b>Hardened deploy pipeline</b> — least-privilege GitHub Actions
+              permissions, egress auditing, and pinned dependencies via Dependabot.</span>
+            </li>
+            <li>
+              <span class="check">✓</span>
+              <span><b>Machine-readable security contact</b> — see
+              <a href=".well-known/security.txt">/.well-known/security.txt</a> (RFC 9116).</span>
+            </li>
+          </ul>
+        </section>
+      </main>
+
+      <footer>
+        <div class="foot-row">
+          <div>
+            © CyberDrain &amp; CIPP Contributors · Licensed under
+            <a href="https://github.com/KelvinTegelaar/CIPP/blob/main/LICENSE.md" rel="noopener">AGPL-3.0</a>
+          </div>
+          <div class="foot-links">
+            <a href="https://cipp.app">cipp.app</a>
+            <a href="https://docs.cipp.app">Documentation</a>
+            <a href="https://github.com/KelvinTegelaar/CIPP/security/policy" rel="noopener">Security policy</a>
+            <a href=".well-known/security.txt">security.txt</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

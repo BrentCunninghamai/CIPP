@@ -1,0 +1,72 @@
+name: Deploy GitHub Pages
+
+# Publishes the static project landing site in ./docs to GitHub Pages.
+#
+# Security posture:
+#   * Least-privilege GITHUB_TOKEN — no permissions by default, only the exact
+#     scopes each job needs are granted below.
+#   * step-security/harden-runner audits egress so any unexpected network call
+#     from a compromised dependency is surfaced.
+#   * The checkout does not persist credentials into the workspace.
+#   * Only ./docs is uploaded — application source is never bundled into the
+#     published artifact.
+#   * A single-flight concurrency group prevents overlapping deploys.
+#
+# One-time setup: in repo Settings → Pages, set "Build and deployment" →
+# "Source" to "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/deploy_github_pages.yml"
+  workflow_dispatch:
+
+# Deny everything by default; grant per-job below.
+permissions: {}
+
+# Allow only one concurrent Pages deployment; never cancel an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Pages artifact
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # deploy to Pages
+      id-token: write # OIDC verification of the deployment origin
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,5 @@
+# Landing page for the CIPP project — https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+Sitemap: /sitemap.xml
